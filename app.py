@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 
 st.set_page_config(page_title="AgriYield", page_icon="🌾")
 st.title("🌾 AgriYield Viability Engine")
@@ -11,31 +11,30 @@ st.write("Determine crop survival probability using localized soil and weather t
 @st.cache_resource
 def build_agri_model():
     np.random.seed(123)
-    n_samples = 400
+    n_samples = 2000 # Increased dataset size
     
-    # generating soil and weather data
-    ph_level = np.random.normal(6.5, 1.0, n_samples)
-    rainfall_mm = np.random.normal(100, 40, n_samples)
-    temp_c = np.random.normal(24, 6, n_samples)
+    # Generating WIDE data including extreme out-of-bounds conditions
+    ph_level = np.random.uniform(0.0, 14.0, n_samples)
+    rainfall_mm = np.random.uniform(0, 300, n_samples)
+    temp_c = np.random.uniform(0, 50, n_samples)
     
-    # Logic: Crop likes pH 6-7.5, rainfall 80-150mm, temp 20-30C
-    # If conditions are good, survival = 1, else 0
+    # The Goldilocks Zone: Only survives in these strict ranges
     conditions_met = (
         (ph_level >= 5.5) & (ph_level <= 7.8) &
         (rainfall_mm >= 60) & (rainfall_mm <= 160) &
         (temp_c >= 18) & (temp_c <= 32)
     )
     
-    # Adding a little randomness so the ML has to actually learn
-    noise = np.random.choice([True, False], n_samples, p=[0.1, 0.9])
-    survival = np.where(conditions_met ^ noise, 1, 0) # XOR for noise
+    # Add a tiny bit of noise (nature is unpredictable)
+    noise = np.random.choice([True, False], n_samples, p=[0.05, 0.95])
+    survival = np.where(conditions_met ^ noise, 1, 0) 
     
     agri_data = pd.DataFrame({'ph': ph_level, 'rain': rainfall_mm, 'temp': temp_c, 'survival': survival})
     
-    # Logistic Regression for binary classification
-    log_reg = LogisticRegression()
-    log_reg.fit(agri_data[['ph', 'rain', 'temp']], agri_data['survival'])
-    return log_reg
+    # Random Forest is perfect for non-linear "Goldilocks" boundaries
+    rf_model = RandomForestClassifier(n_estimators=100, max_depth=7, random_state=42)
+    rf_model.fit(agri_data[['ph', 'rain', 'temp']], agri_data['survival'])
+    return rf_model
 
 model = build_agri_model()
 
@@ -63,3 +62,5 @@ else:
         st.caption("- Issue detected: Soil pH is outside optimal range (5.5 - 7.8).")
     if val_rain < 60:
         st.caption("- Issue detected: Insufficient rainfall for this crop variant.")
+    if val_temp > 32 or val_temp < 18:
+        st.caption("- Issue detected: Temperature is outside survivable threshold.")
